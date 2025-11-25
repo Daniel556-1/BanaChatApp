@@ -1,10 +1,16 @@
 import tkinter as tk
+import socket
+from packet import Packet
 
 # App setup
 root = tk.Tk()
 root.geometry("1000x600")
 root.resizable(False, False)
 root.title("Banana Chat App Client")
+
+# Packet data
+sequence = 1
+clientSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
 # variables
 room = ""
@@ -14,6 +20,13 @@ room = ""
 def wipe():
     for i in root.winfo_children():
         i.destroy()
+
+def test():
+    global sequence
+    pk = Packet(sequence, 0, ["SYN"], "Hello server")
+    sequence += 1
+    clientSocket.sendto(pk.packetToBytes(), ("127.0.0.1", 6789))
+    print("SYN packet sent!")
 
 # Main Menu Function
 def mainMenu():
@@ -36,7 +49,7 @@ def mainMenu():
 
     # Joining room logic here
 
-    button = tk.Button(frame, text = "Enter", font = ("Sans Serif", 16))
+    button = tk.Button(frame, text = "Enter", font = ("Sans Serif", 16), command = test)
     button.pack(pady = 20, padx = 20)
 
 def connectingPage():
@@ -53,6 +66,7 @@ def connectingPage():
 
     # Connection logic here
 
+
 # Chat Page Function
 def chatPage():
     wipe()
@@ -67,5 +81,5 @@ def chatPage():
     title.pack(pady = 20, padx = 20)
 
 # Start
-chatPage()
+mainMenu()
 root.mainloop()
