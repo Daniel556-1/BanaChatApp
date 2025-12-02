@@ -35,20 +35,11 @@ def setLossMode():
 def setDelayMode():
     mode.update({
         "lossRate": 0,
-        "delay": 1,
+        "delay": 0.1,
         "duplicateRate": 0,
         "reorder": False,
     })
     print("Delay mode activated")
-
-def setDuplicateMode():
-    mode.update({
-        "lossRate": 0,
-        "delay": 0,
-        "duplicateRate": 1,
-        "reorder": False,
-    })
-    print("Duplicate mode activated")
 
 def setReorderMode():
     mode.update({
@@ -121,12 +112,13 @@ def listen_for_packets():
                 print("4th handshake sent")
 
             elif "WELCOME" in packet.flags and handshake_state == "SYNACK_RECEIVED":
+                if handshake_state == "CONNECTED":
+                    continue
+                handshake_state = "CONNECTED"
                 expected_server_seq = packet.sequence + 1
-                handshake_state = "WELCOME_RECEIVED"
                 pk = Packet(sequence, expected_server_seq, ["ACK"], "", room, username)
                 sequence += 1
                 sendPacket(pk)
-                handshake_state = "CONNECTED"
                 print("Connected to server!")
                 chatPage()
 
@@ -148,6 +140,7 @@ def listen_for_packets():
                     tot += 1
                     print(tot)
                     continue
+
                 if ps == expected_server_seq:
                     expected_server_seq += 1
 
@@ -163,10 +156,6 @@ def listen_for_packets():
                     tot += 1
                     print(tot)
                     continue
-                elif ps < expected_server_seq:
-                    ack = Packet(sequence, ps + 1, ["ACK"], "", room, username)
-                    sequence += 1
-                    sendPacket(ack)
         except:
             continue
 
@@ -185,7 +174,6 @@ def mainMenu():
     tk.Button(modeFrame, text = "Normal", font=("Sans Serif", 10), command = setNormalMode).pack(side = "left", padx = 2, pady = 2)
     tk.Button(modeFrame, text = "Loss", font=("Sans Serif", 10), command = setLossMode).pack(side = "left", padx = 2, pady = 2)
     tk.Button(modeFrame, text = "Delay", font=("Sans Serif", 10), command = setDelayMode).pack(side = "left", padx = 2, pady = 2)
-    tk.Button(modeFrame, text = "Dupe", font=("Sans Serif", 10), command = setDuplicateMode).pack(side = "left", padx = 2, pady = 2)
     tk.Button(modeFrame, text = "Reorder", font=("Sans Serif", 10), command = setReorderMode).pack(side = "left", padx = 2, pady = 2)
 
     frame = tk.Frame(background)

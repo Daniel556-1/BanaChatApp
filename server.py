@@ -34,7 +34,7 @@ def recievePacket(payload, source):
     print(source)
 
     # SYNACK
-    if packet.hasSynFlag() == True and packet.hasAckFlag() == False and (source not in clients or (source in clients and clients[source]["state"] not in ["SYNACK", "CONNECTED"] and clients[source]["awaitingAck"] == False)):
+    if packet.hasSynFlag() == True and packet.hasAckFlag() == False and (source not in clients or (source in clients and clients[source]["state"] not in ["SYNACK", "WELCOME", "CONNECTED"] and clients[source]["awaitingAck"] == False)):
         print("SYN recieved from " + str(source))
 
         if source not in clients:
@@ -120,6 +120,12 @@ def recievePacket(payload, source):
     
     # Connected packet recieval
     elif source in clients and clients[source]["state"] == "CONNECTED":
+        if packet.ack == clients[source].get("lastAckReceived"):
+            print("Duplicate ACK, ignoring")
+        else:
+            clients[source]["lastAckReceived"] = packet.ack
+            clients[source]["awaitingAck"] = False
+
         if source in clients and packet.hasAckFlag() and clients[source].get("awaitingAck") == True:
             if packet.ack == clients[source]["expectedAck"]:
                 clients[source]["awaitingAck"] = False
@@ -137,22 +143,22 @@ def recievePacket(payload, source):
             clients[source]["expectedClientSeq"] = packet.sequence + 1
         
         # Broadcast to everyone in the same room
-        
-        room = packet.room
-        if room in chatrooms:
-            for client_addr in chatrooms[room]:
+        if not packet.hasAckFlag():
+            room = packet.room
+            if room in chatrooms:
+                for client_addr in chatrooms[room]:
 
-                forward_packet = Packet(
-                    clients[client_addr]["serverSeqNum"],
-                    packet.sequence,                     
-                    flags=packet.flags,
-                    payload=packet.payload,
-                    room=room,
-                    user=packet.user
-                )
+                    forward_packet = Packet(
+                        clients[client_addr]["serverSeqNum"],
+                        packet.sequence,                     
+                        flags=packet.flags,
+                        payload=packet.payload,
+                        room=room,
+                        user=packet.user
+                    )
 
-                sendPacketWithRetransmit(forward_packet, client_addr)
-                clients[client_addr]["serverSeqNum"] += 1
+                    sendPacketWithRetransmit(forward_packet, client_addr)
+                    clients[client_addr]["serverSeqNum"] += 1
         
         return
     else:
@@ -174,11 +180,12 @@ def retransmitThread():
         inactiveUser = set()
         for addr, info in clients.items():
             
-            if info["retransmit"] > 10:
+            if info["retransmit"] > 1000:
                 inactiveUser.add(addr)
             if info.get("awaitingAck") and info.get("lastSentPacket") and time.time() - info["lastSentTime"] > 0.1:
                 print("Retransmitting packet to " + str(addr))
                 serverSocket.sendto(info["lastSentPacket"].packetToBytes(), addr)
+                print(info["lastSentPacket"].packetToBytes())
                 info["retransmit"] += 1
                 info["lastSentTime"] = time.time()
             
