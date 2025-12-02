@@ -7,6 +7,7 @@ import socket
 import random
 import time
 import uuid
+import threading
 from packet import Packet
 
 chatrooms = {}
@@ -125,7 +126,9 @@ def recievePacket(payload, source):
                 clients[source]["lastSentPacket"] = None
                 clients[source]["expectedAck"] = None
                 clients[source]["retransmit"] = 0
+                clients[source]["expectedClientSeq"] = packet.sequence + 1
                 print("Recieved ACK from " + str(source))
+                return
 
         if clients[source]["expectedClientSeq"] is not None:
             if packet.sequence != clients[source]["expectedClientSeq"]:
@@ -157,29 +160,40 @@ def recievePacket(payload, source):
         return
 
 
+def listeningThread():
+    while True:
+        try:
+            data, addr = serverSocket.recvfrom(4096)
+            recievePacket(data, addr)
+        except BlockingIOError:
+            pass
+        time.sleep(0.01)
+
+def retransmitThread():
+    while True:
+        inactiveUser = set()
+        for addr, info in clients.items():
+            
+            if info["retransmit"] > 10:
+                inactiveUser.add(addr)
+            if info.get("awaitingAck") and info.get("lastSentPacket") and time.time() - info["lastSentTime"] > 0.1:
+                print("Retransmitting packet to " + str(addr))
+                serverSocket.sendto(info["lastSentPacket"].packetToBytes(), addr)
+                info["retransmit"] += 1
+                info["lastSentTime"] = time.time()
+            
+            if time.time() - info["lastSentTime"] > 600:
+                inactiveUser.add(addr)
+
+        for i in inactiveUser:
+            chatrooms[clients[i]["roomName"]].discard(i)
+            clients.pop(i)
+
+        time.sleep(0.01)
+
+threading.Thread(target = listeningThread, daemon = True).start()
+threading.Thread(target = retransmitThread, daemon = True).start()
+
+print("Starting Server")
 while True:
-    try:
-        data, addr = serverSocket.recvfrom(4096)
-        recievePacket(data, addr)
-    except BlockingIOError:
-        pass
-    
-    inactiveUser = set()
-    for addr, info in clients.items():
-        
-        if info["retransmit"] > 10:
-            inactiveUser.add(addr)
-        if info.get("awaitingAck") and info.get("lastSentPacket") and time.time() - info["lastSentTime"] > 2:
-            print("Retransmitting packet to " + str(addr))
-            serverSocket.sendto(info["lastSentPacket"].packetToBytes(), addr)
-            info["retransmit"] += 1
-            info["lastSentTime"] = time.time()
-        
-        if time.time() - info["lastSentTime"] > 600:
-            inactiveUser.add(addr)
-
-    for i in inactiveUser:
-        chatrooms[clients[i]["roomName"]].discard(i)
-        clients.pop(i)
-
     time.sleep(0.01)
